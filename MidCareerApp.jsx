@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 
 // ─── 색상 상수 ───────────────────────────────────────────────────────────────
 const C = {
@@ -234,6 +234,76 @@ function Modal({ children, onClose, title, width=600 }) {
   );
 }
 
+// ─── Toast 알림 ──────────────────────────────────────────────────────────────
+function ToastContainer({ toasts, onRemove }) {
+  return (
+    <div style={{ position:"fixed", bottom:24, right:24, zIndex:2000, display:"flex", flexDirection:"column", gap:8, pointerEvents:"none" }}>
+      {toasts.map(t => (
+        <div key={t.id} style={{ background:t.type==="success"?C.success:t.type==="error"?C.danger:C.gray800, color:C.white, padding:"12px 18px", borderRadius:10, fontSize:14, fontWeight:600, boxShadow:"0 4px 16px rgba(0,0,0,0.2)", display:"flex", alignItems:"center", gap:10, minWidth:240, pointerEvents:"all", animation:"slideIn 0.2s ease" }}>
+          <span>{t.type==="success"?"✅":t.type==="error"?"❌":"ℹ️"}</span>
+          <span style={{ flex:1 }}>{t.message}</span>
+          <button onClick={()=>onRemove(t.id)} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.7)", cursor:"pointer", fontSize:16, lineHeight:1, padding:0 }}>×</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── 경력 재해석 데이터 ────────────────────────────────────────────────────────
+const CAREER_PIVOTS = {
+  "영업관리": [
+    { role:"CRM 전략 매니저", reason:"고객 관계 관리 경험 활용", match:88 },
+    { role:"사업개발 이사", reason:"B2B 네트워크 및 협상력 활용", match:85 },
+    { role:"채널 파트너 관리", reason:"영업 채널 운영 경험 전환", match:80 },
+  ],
+  "인사관리": [
+    { role:"조직개발 컨설턴트", reason:"HR 기획 및 조직문화 전문성", match:87 },
+    { role:"HR Tech 기획자", reason:"인사 시스템 디지털 전환 수요", match:79 },
+    { role:"기업문화 전문가", reason:"조직 진단 및 변화관리 경험", match:76 },
+  ],
+  "재무기획": [
+    { role:"CFO (스타트업)", reason:"재무 전략 경험의 스타트업 수요 높음", match:90 },
+    { role:"투자심사역", reason:"재무 분석 및 사업성 검토 전문성", match:82 },
+    { role:"경영기획 임원", reason:"재무 + 전략 융합 포지션", match:84 },
+  ],
+  "SCM": [
+    { role:"이커머스 물류기획", reason:"SCM 경험의 이커머스 수요 급증", match:86 },
+    { role:"공급망 컨설턴트", reason:"제조/유통 SCM 전문성 활용", match:81 },
+    { role:"물류 스타트업 COO", reason:"물류 운영 전반 경험 활용", match:78 },
+  ],
+  "경영기획": [
+    { role:"전략 컨설턴트", reason:"기획 및 분석 능력 컨설팅 분야 활용", match:85 },
+    { role:"투자심사역 (CVC)", reason:"사업 분석 및 포트폴리오 관리", match:80 },
+    { role:"신사업 기획 임원", reason:"중장기 전략 수립 경험 전환", match:83 },
+  ],
+  "마케팅전략": [
+    { role:"브랜드 전략 디렉터", reason:"브랜드 관리 및 마케팅 전략 통합", match:88 },
+    { role:"그로스 마케터", reason:"디지털 전환 시대 마케팅 역량", match:77 },
+    { role:"CMO (중견기업)", reason:"마케팅 총괄 경험 임원급 수요", match:85 },
+  ],
+  "생산관리": [
+    { role:"스마트팩토리 컨설턴트", reason:"제조 현장 경험 + 디지털 전환", match:82 },
+    { role:"품질경영 전문위원", reason:"생산·품질 통합 관리 경험", match:80 },
+    { role:"제조 스타트업 COO", reason:"공장 운영 전반 경험 활용", match:78 },
+  ],
+  "default": [
+    { role:"경영지원 임원", reason:"다양한 관리 경험의 종합적 활용", match:75 },
+    { role:"중소기업 컨설턴트", reason:"업계 경험 기반 자문 역할", match:72 },
+    { role:"사회적기업 경영진", reason:"경력 전환 후 사회 기여형 커리어", match:70 },
+  ],
+};
+
+function getCareerPivots(skills) {
+  if (!skills?.length) return CAREER_PIVOTS.default;
+  for (const skill of skills) {
+    for (const [key, pivots] of Object.entries(CAREER_PIVOTS)) {
+      if (key !== "default" && skill.includes(key.slice(0,3))) return pivots;
+    }
+    if (CAREER_PIVOTS[skill]) return CAREER_PIVOTS[skill];
+  }
+  return CAREER_PIVOTS.default;
+}
+
 // ─── 로그인 페이지 ─────────────────────────────────────────────────────────────
 function LoginPage({ onDemoLogin }) {
   return (
@@ -432,12 +502,59 @@ function JobCard({ job, isSaved, onSave, onSelect }) {
 }
 
 // ─── 직무 상세 모달 ───────────────────────────────────────────────────────────
-function JobDetailModal({ job, profile, isSaved, onSave, onClose }) {
+function ApplyModal({ job, onClose, onConfirm }) {
+  const resume = LS.get("resume", null);
+  return (
+    <Modal title="지원하기" onClose={onClose} width={480}>
+      <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+        <div style={{ background:C.primaryLight, borderRadius:12, padding:16 }}>
+          <div style={{ fontSize:16, fontWeight:700, color:C.gray800 }}>{job.title}</div>
+          <div style={{ fontSize:14, color:C.gray500, marginTop:4 }}>{job.company} · {job.location}</div>
+        </div>
+        <div>
+          <div style={{ fontSize:14, fontWeight:600, color:C.gray700, marginBottom:8 }}>첨부 이력서</div>
+          {resume ? (
+            <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", background:C.successLight, borderRadius:8, border:`1px solid ${C.success}` }}>
+              <span style={{ fontSize:20 }}>📄</span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:C.gray700 }}>{resume.name}</div>
+                <div style={{ fontSize:12, color:C.gray500 }}>{resume.size} · {resume.uploadedAt}</div>
+              </div>
+              <Tag color="green" style={{ marginLeft:"auto" }}>선택됨</Tag>
+            </div>
+          ) : (
+            <div style={{ padding:"12px 14px", background:C.warningLight, borderRadius:8, border:`1px solid ${C.warning}`, fontSize:13, color:C.warning }}>
+              ⚠️ 등록된 이력서가 없습니다. 프로필에서 이력서를 업로드해 주세요.
+            </div>
+          )}
+        </div>
+        <div style={{ fontSize:13, color:C.gray500, background:C.gray50, borderRadius:8, padding:"10px 14px" }}>
+          📌 지원 후 저장 공고의 상태가 <strong>"지원함"</strong>으로 변경됩니다.
+        </div>
+        <div style={{ display:"flex", gap:10 }}>
+          <Btn variant="ghost" onClick={onClose} style={{ flex:1 }}>취소</Btn>
+          <Btn onClick={onConfirm} style={{ flex:2 }}>지원하기 →</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function JobDetailModal({ job, profile, isSaved, onSave, onClose, onApply }) {
+  const [showApply, setShowApply] = useState(false);
   const skillMatched = job.requirements.skills.filter(s => expandSkills(profile?.skills||[]).some(p => p.toLowerCase().includes(s.toLowerCase())));
   const skillTotal = job.requirements.skills.length;
   const expOk = (profile?.totalExperience||0) >= (job.requirements.experienceYears||0);
 
   return (
+    <>
+    {showApply && (
+      <ApplyModal
+        job={job}
+        onClose={() => setShowApply(false)}
+        onConfirm={() => { setShowApply(false); onApply(job); onClose(); }}
+      />
+    )}
     <Modal title={job.title} onClose={onClose} width={680}>
       <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
         {/* 헤더 정보 */}
@@ -513,10 +630,11 @@ function JobDetailModal({ job, profile, isSaved, onSave, onClose }) {
         {/* 버튼 */}
         <div style={{ display:"flex", gap:12, paddingTop:8, borderTop:`1px solid ${C.border}` }}>
           <Btn variant={isSaved?"secondary":"ghost"} onClick={onSave} style={{ flex:1 }}>{isSaved?"★ 저장됨":"☆ 저장하기"}</Btn>
-          <Btn style={{ flex:2 }} onClick={() => window.open(job.applyUrl, "_blank")}>지원하기 →</Btn>
+          <Btn style={{ flex:2 }} onClick={() => setShowApply(true)}>지원하기 →</Btn>
         </div>
       </div>
     </Modal>
+    </>
   );
 }
 
@@ -564,6 +682,28 @@ function DashboardPage({ profile, jobs, savedJobs, onSaveJob, onSelectJob }) {
               <div key={j.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                 <span style={{ fontSize:14, color:C.gray700 }}>{j.company} — {j.title}</span>
                 <DeadlineBadge deadline={j.deadline} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 경력 재해석 카드 */}
+      {profile?.skills?.length > 0 && (
+        <div style={{ background:"linear-gradient(135deg,#F0FDF4,#ECFDF5)", border:`1px solid ${C.success}`, borderRadius:16, padding:"20px 24px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+            <span style={{ fontSize:22 }}>🔄</span>
+            <div>
+              <h3 style={{ margin:0, fontSize:16, fontWeight:700, color:C.success }}>AI 경력 재해석</h3>
+              <p style={{ margin:0, fontSize:13, color:C.gray500 }}>{profile.currentJob || "내 경력"} 기반으로 전환 가능한 커리어</p>
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+            {getCareerPivots(profile.skills).map((p, i) => (
+              <div key={i} style={{ background:C.white, borderRadius:10, padding:"12px 14px", border:`1px solid ${C.border}` }}>
+                <div style={{ fontSize:20, fontWeight:800, color:C.success, marginBottom:4 }}>{p.match}%</div>
+                <div style={{ fontSize:14, fontWeight:700, color:C.gray800 }}>{p.role}</div>
+                <div style={{ fontSize:12, color:C.gray500, marginTop:4 }}>{p.reason}</div>
               </div>
             ))}
           </div>
@@ -786,6 +926,87 @@ function ProfilePage({ profile, onUpdate }) {
           </div>
         )}
       </Card>
+
+      {/* ─── 이력서 업로드 ─── */}
+      <Card>
+        <h3 style={{ margin:"0 0 12px", fontSize:16, fontWeight:700, color:C.gray800 }}>이력서 업로드</h3>
+        <ResumeUploadSection />
+      </Card>
+
+      {/* ─── 경력 재해석 ─── */}
+      <Card style={{ border:`2px solid ${C.primary}` }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
+          <span style={{ fontSize:22 }}>🔄</span>
+          <div>
+            <h3 style={{ margin:0, fontSize:16, fontWeight:700, color:C.primary }}>AI 경력 재해석</h3>
+            <p style={{ margin:0, fontSize:13, color:C.gray500 }}>내 경험을 살려 도전할 수 있는 새로운 커리어 방향</p>
+          </div>
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          {getCareerPivots(profile.skills).map((pivot, i) => (
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", background:C.gray50, borderRadius:10, border:`1px solid ${C.border}` }}>
+              <div>
+                <div style={{ fontSize:15, fontWeight:700, color:C.gray800 }}>{pivot.role}</div>
+                <div style={{ fontSize:13, color:C.gray500, marginTop:3 }}>💡 {pivot.reason}</div>
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+                <div style={{ textAlign:"center" }}>
+                  <div style={{ fontSize:18, fontWeight:800, color:pivot.match>=85?C.success:C.primary }}>{pivot.match}%</div>
+                  <div style={{ fontSize:11, color:C.gray400 }}>전환 적합도</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p style={{ margin:"14px 0 0", fontSize:12, color:C.gray400, textAlign:"center" }}>
+          * 보유 스킬과 경력을 기반으로 AI가 분석한 커리어 전환 추천입니다
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+// ─── 이력서 업로드 섹션 ──────────────────────────────────────────────────────
+function ResumeUploadSection() {
+  const [file, setFile] = useState(() => LS.get("resume", null));
+  const [dragging, setDragging] = useState(false);
+
+  const handleFile = f => {
+    if (!f) return;
+    if (f.type !== "application/pdf") { alert("PDF 파일만 업로드 가능합니다."); return; }
+    const info = { name: f.name, size: (f.size / 1024).toFixed(1) + " KB", uploadedAt: new Date().toLocaleString("ko-KR") };
+    setFile(info);
+    LS.set("resume", info);
+  };
+
+  return (
+    <div>
+      {file ? (
+        <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background:C.successLight, borderRadius:10, border:`1px solid ${C.success}` }}>
+          <span style={{ fontSize:28 }}>📄</span>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:C.gray800 }}>{file.name}</div>
+            <div style={{ fontSize:12, color:C.gray500 }}>{file.size} · {file.uploadedAt} 업로드</div>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <Tag color="green">✓ 등록됨</Tag>
+            <button onClick={() => { setFile(null); LS.set("resume", null); }} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 10px", fontSize:12, color:C.gray500, cursor:"pointer" }}>삭제</button>
+          </div>
+        </div>
+      ) : (
+        <div
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={e => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
+          style={{ border:`2px dashed ${dragging?C.primary:C.border}`, borderRadius:12, padding:"32px 20px", textAlign:"center", background:dragging?C.primaryLight:C.gray50, transition:"all 0.15s", cursor:"pointer" }}
+          onClick={() => document.getElementById("resume-input").click()}
+        >
+          <div style={{ fontSize:36, marginBottom:8 }}>📤</div>
+          <div style={{ fontSize:15, fontWeight:600, color:C.gray700 }}>이력서를 드래그하거나 클릭해서 업로드</div>
+          <div style={{ fontSize:13, color:C.gray400, marginTop:4 }}>PDF 형식 · 최대 10MB</div>
+          <input id="resume-input" type="file" accept=".pdf" style={{ display:"none" }} onChange={e => handleFile(e.target.files[0])} />
+        </div>
+      )}
     </div>
   );
 }
@@ -993,11 +1214,48 @@ function Sidebar({ activePage, setActivePage, user, profile, onLogout, savedCoun
 // ─── 헤더 ─────────────────────────────────────────────────────────────────────
 const PAGE_TITLES = { dashboard:"대시보드", jobs:"채용공고 전체보기", saved:"저장한 공고", calendar:"채용 캘린더", profile:"내 프로필" };
 
-function Header({ activePage }) {
+function Header({ activePage, notifications, onClearNotif }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const unread = notifications.filter(n => !n.read).length;
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   return (
     <div style={{ height:60, background:C.white, borderBottom:`1px solid ${C.border}`, padding:"0 24px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
       <h1 style={{ margin:0, fontSize:18, fontWeight:700, color:C.gray800 }}>{PAGE_TITLES[activePage]}</h1>
       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+        {/* 알림 벨 */}
+        <div ref={ref} style={{ position:"relative" }}>
+          <button onClick={() => setOpen(o => !o)} style={{ position:"relative", background:"none", border:`1px solid ${C.border}`, borderRadius:8, width:36, height:36, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            🔔
+            {unread > 0 && (
+              <span style={{ position:"absolute", top:-4, right:-4, background:C.danger, color:C.white, borderRadius:"50%", width:16, height:16, fontSize:10, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center" }}>{unread}</span>
+            )}
+          </button>
+          {open && (
+            <div style={{ position:"absolute", top:44, right:0, width:320, background:C.white, borderRadius:12, border:`1px solid ${C.border}`, boxShadow:"0 8px 24px rgba(0,0,0,0.12)", zIndex:500, overflow:"hidden" }}>
+              <div style={{ padding:"12px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <span style={{ fontWeight:700, fontSize:14, color:C.gray800 }}>알림</span>
+                {notifications.length > 0 && <button onClick={onClearNotif} style={{ background:"none", border:"none", fontSize:12, color:C.gray400, cursor:"pointer" }}>모두 지우기</button>}
+              </div>
+              <div style={{ maxHeight:300, overflow:"auto" }}>
+                {notifications.length === 0 ? (
+                  <div style={{ padding:"24px 16px", textAlign:"center", color:C.gray400, fontSize:14 }}>새 알림이 없습니다</div>
+                ) : notifications.map(n => (
+                  <div key={n.id} style={{ padding:"12px 16px", borderBottom:`1px solid ${C.border}`, background:n.read?"transparent":C.primaryLight }}>
+                    <div style={{ fontSize:13, color:C.gray700, lineHeight:1.5 }}>{n.message}</div>
+                    <div style={{ fontSize:11, color:C.gray400, marginTop:4 }}>{n.time}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         <div style={{ background:C.successLight, color:C.success, padding:"4px 12px", borderRadius:20, fontSize:12, fontWeight:700 }}>
           🟢 데모 모드
         </div>
@@ -1016,10 +1274,32 @@ export default function MidCareerApp() {
     return "app";
   });
   const [activePage, setActivePage] = useState("dashboard");
-  const [user, setUser]     = useState(() => LS.get("user", null));
+  const [user, setUser]       = useState(() => LS.get("user", null));
   const [profile, setProfile] = useState(() => LS.get("profile", null));
   const [savedJobs, setSavedJobs] = useState(() => LS.get("savedJobs", []));
   const [selectedJob, setSelectedJob] = useState(null);
+  const [toasts, setToasts]   = useState([]);
+  const [notifications, setNotifications] = useState(() => LS.get("notifications", []));
+  const toastId = useRef(0);
+
+  // ── 토스트 헬퍼 ──
+  const addToast = useCallback((message, type = "success") => {
+    const id = ++toastId.current;
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
+  }, []);
+
+  const removeToast = useCallback(id => setToasts(prev => prev.filter(t => t.id !== id)), []);
+
+  // ── 알림 헬퍼 ──
+  const addNotif = useCallback((message) => {
+    const n = { id: Date.now(), message, time: new Date().toLocaleTimeString("ko-KR", { hour:"2-digit", minute:"2-digit" }), read: false };
+    setNotifications(prev => {
+      const next = [n, ...prev].slice(0, 20);
+      LS.set("notifications", next);
+      return next;
+    });
+  }, []);
 
   // AI 매칭 적용
   const jobs = useMemo(() =>
@@ -1039,18 +1319,45 @@ export default function MidCareerApp() {
   const handleProfileComplete = (p) => {
     setProfile(p); LS.set("profile", p);
     setView("app");
+    addToast(`${p.name}님, AI 매칭을 시작합니다! 🎯`);
   };
 
   const handleSaveJob = useCallback((job) => {
     setSavedJobs(prev => {
       const exists = prev.some(j => j.id === job.id);
-      const next = exists ? prev.filter(j => j.id !== job.id) : [...prev, { ...job, savedAt: new Date().toISOString(), status: "저장됨" }];
+      const next = exists
+        ? prev.filter(j => j.id !== job.id)
+        : [...prev, { ...job, savedAt: new Date().toISOString(), status: "저장됨" }];
+      LS.set("savedJobs", next);
+      if (!exists) {
+        addToast(`"${job.title}" 저장됨 📌`);
+        addNotif(`[${job.company}] ${job.title} 공고를 저장했습니다.`);
+      } else {
+        addToast(`저장 취소됨`, "info");
+      }
+      return next;
+    });
+  }, [addToast, addNotif]);
+
+  const handleApplyJob = useCallback((job) => {
+    // 저장됨 → 지원함 상태 변경
+    setSavedJobs(prev => {
+      const exists = prev.some(j => j.id === job.id);
+      const base = exists ? prev : [...prev, { ...job, savedAt: new Date().toISOString(), status: "저장됨" }];
+      const next = base.map(j => j.id === job.id ? { ...j, status:"지원함", appliedAt: new Date().toISOString() } : j);
       LS.set("savedJobs", next);
       return next;
     });
-  }, []);
+    addToast(`"${job.title}" 지원 완료! ✅`, "success");
+    addNotif(`[${job.company}] ${job.title}에 지원했습니다.`);
+    setSelectedJob(null);
+  }, [addToast, addNotif]);
 
-  const handleLogout = () => { LS.clear(); setUser(null); setProfile(null); setSavedJobs([]); setView("login"); };
+  const handleLogout = () => {
+    LS.clear();
+    setUser(null); setProfile(null); setSavedJobs([]); setNotifications([]);
+    setView("login");
+  };
 
   if (view === "login") return <LoginPage onDemoLogin={handleDemoLogin} />;
   if (view === "onboarding") return <OnboardingPage user={user} onComplete={handleProfileComplete} />;
@@ -1059,23 +1366,37 @@ export default function MidCareerApp() {
     <div style={{ display:"flex", height:"100vh", background:C.bg, overflow:"hidden" }}>
       <Sidebar activePage={activePage} setActivePage={setActivePage} user={user} profile={profile} onLogout={handleLogout} savedCount={savedJobs.length} />
       <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", minWidth:0 }}>
-        <Header activePage={activePage} />
+        <Header
+          activePage={activePage}
+          notifications={notifications}
+          onClearNotif={() => { setNotifications([]); LS.set("notifications",[]); }}
+        />
         <main style={{ flex:1, overflow:"auto", padding:24 }}>
           {activePage === "dashboard" && <DashboardPage profile={profile} jobs={jobs} savedJobs={savedJobs} onSaveJob={handleSaveJob} onSelectJob={setSelectedJob} />}
           {activePage === "jobs"      && <JobsPage jobs={jobs} savedJobs={savedJobs} onSaveJob={handleSaveJob} onSelectJob={setSelectedJob} />}
-          {activePage === "profile"   && <ProfilePage profile={profile} onUpdate={p => { setProfile(p); LS.set("profile", p); }} />}
+          {activePage === "profile"   && <ProfilePage profile={profile} onUpdate={p => { setProfile(p); LS.set("profile",p); addToast("프로필이 저장되었습니다 ✅"); }} />}
           {activePage === "calendar"  && <CalendarPage savedJobs={savedJobs} onSelectJob={setSelectedJob} />}
-          {activePage === "saved"     && <SavedJobsPage savedJobs={savedJobs} onSelectJob={setSelectedJob} onRemove={id => { const n=savedJobs.filter(j=>j.id!==id); setSavedJobs(n); LS.set("savedJobs",n); }} onUpdateStatus={(id,s) => { const n=savedJobs.map(j=>j.id===id?{...j,status:s}:j); setSavedJobs(n); LS.set("savedJobs",n); }} />}
+          {activePage === "saved"     && (
+            <SavedJobsPage
+              savedJobs={savedJobs}
+              onSelectJob={setSelectedJob}
+              onRemove={id => { const n=savedJobs.filter(j=>j.id!==id); setSavedJobs(n); LS.set("savedJobs",n); addToast("공고가 삭제되었습니다","info"); }}
+              onUpdateStatus={(id,s) => { const n=savedJobs.map(j=>j.id===id?{...j,status:s}:j); setSavedJobs(n); LS.set("savedJobs",n); addToast(`상태가 "${s}"로 변경되었습니다`); }}
+            />
+          )}
         </main>
       </div>
       {selectedJob && (
         <JobDetailModal
-          job={selectedJob} profile={profile}
+          job={selectedJob}
+          profile={profile}
           isSaved={savedJobs.some(j => j.id === selectedJob.id)}
           onSave={() => handleSaveJob(selectedJob)}
+          onApply={handleApplyJob}
           onClose={() => setSelectedJob(null)}
         />
       )}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 }
