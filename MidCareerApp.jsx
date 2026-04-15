@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { supabase, DEMO_MODE } from "./supabase.js";
 
 // ─── 색상 상수 ───────────────────────────────────────────────────────────────
 const C = {
@@ -305,7 +306,7 @@ function getCareerPivots(skills) {
 }
 
 // ─── 로그인 페이지 ─────────────────────────────────────────────────────────────
-function LoginPage({ onDemoLogin }) {
+function LoginPage({ onDemoLogin, onGoogleLogin, loading }) {
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 50%, #0EA5E9 100%)", display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
       <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:32, width:"100%", maxWidth:440 }}>
@@ -319,15 +320,36 @@ function LoginPage({ onDemoLogin }) {
         <div style={{ background:C.white, borderRadius:20, padding:36, width:"100%", boxShadow:"0 20px 60px rgba(0,0,0,0.2)" }}>
           <h2 style={{ margin:"0 0 24px", fontSize:22, fontWeight:700, color:C.gray800, textAlign:"center" }}>시작하기</h2>
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            <button onClick={onDemoLogin} style={{ padding:"14px", background:C.primary, color:C.white, border:"none", borderRadius:10, fontSize:16, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-              <span>🚀</span> 데모로 시작하기
+            {/* Google 로그인 */}
+            <button
+              onClick={onGoogleLogin}
+              disabled={loading}
+              style={{ padding:"14px", background:loading?"#f3f4f6":C.white, color:C.gray700, border:`1.5px solid ${C.border}`, borderRadius:10, fontSize:16, fontWeight:600, cursor:loading?"wait":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10, boxShadow:"0 1px 3px rgba(0,0,0,0.1)", transition:"all 0.15s" }}
+              onMouseEnter={e => { if(!loading) e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.15)"; }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.1)"; }}
+            >
+              {/* Google SVG 로고 */}
+              <svg width="20" height="20" viewBox="0 0 48 48">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+              </svg>
+              {loading ? "연결 중..." : "Google 계정으로 로그인"}
             </button>
-            <button style={{ padding:"14px", background:C.white, color:C.gray600, border:`1.5px solid ${C.border}`, borderRadius:10, fontSize:16, fontWeight:600, cursor:"not-allowed", display:"flex", alignItems:"center", justifyContent:"center", gap:8, opacity:0.6 }}>
-              <span>🔑</span> Google 로그인 (준비 중)
+            {/* 구분선 */}
+            <div style={{ display:"flex", alignItems:"center", gap:12, margin:"4px 0" }}>
+              <div style={{ flex:1, height:1, background:C.border }} />
+              <span style={{ fontSize:13, color:C.gray400 }}>또는</span>
+              <div style={{ flex:1, height:1, background:C.border }} />
+            </div>
+            {/* 데모 */}
+            <button onClick={onDemoLogin} style={{ padding:"14px", background:C.primary, color:C.white, border:"none", borderRadius:10, fontSize:15, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+              <span>🚀</span> 데모로 먼저 체험하기
             </button>
           </div>
           <p style={{ margin:"20px 0 0", fontSize:13, color:C.gray400, textAlign:"center" }}>
-            데모 모드에서는 모든 기능을 체험할 수 있습니다.<br/>데이터는 브라우저에 저장됩니다.
+            Google 로그인 시 계정별 데이터가 저장됩니다.
           </p>
         </div>
         {/* 특징 */}
@@ -1264,15 +1286,33 @@ function Header({ activePage, notifications, onClearNotif }) {
   );
 }
 
+// ─── 로딩 화면 ───────────────────────────────────────────────────────────────
+function LoadingScreen() {
+  return (
+    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#1E3A8A,#1D4ED8,#0EA5E9)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16 }}>
+      <div style={{ fontSize:48 }}>🎯</div>
+      <div style={{ color:C.white, fontSize:18, fontWeight:700 }}>MidCareer Match AI</div>
+      <div style={{ display:"flex", gap:8, marginTop:8 }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{ width:10, height:10, borderRadius:"50%", background:"rgba(255,255,255,0.8)", animation:`bounce 1s ease ${i*0.2}s infinite alternate` }} />
+        ))}
+      </div>
+      <style>{`@keyframes bounce { from{transform:translateY(0)} to{transform:translateY(-10px)} }`}</style>
+    </div>
+  );
+}
+
 // ─── 메인 앱 ──────────────────────────────────────────────────────────────────
 export default function MidCareerApp() {
-  const [view, setView] = useState(() => {
+  // DEMO_MODE: .env 없으면 true, Supabase 있으면 false
+  const [view, setView] = useState(DEMO_MODE ? (() => {
     const u = LS.get("user", null);
     const p = LS.get("profile", null);
     if (!u) return "login";
     if (!p) return "onboarding";
     return "app";
-  });
+  })() : "loading");
+
   const [activePage, setActivePage] = useState("dashboard");
   const [user, setUser]       = useState(() => LS.get("user", null));
   const [profile, setProfile] = useState(() => LS.get("profile", null));
@@ -1280,6 +1320,7 @@ export default function MidCareerApp() {
   const [selectedJob, setSelectedJob] = useState(null);
   const [toasts, setToasts]   = useState([]);
   const [notifications, setNotifications] = useState(() => LS.get("notifications", []));
+  const [authLoading, setAuthLoading] = useState(false);
   const toastId = useRef(0);
 
   // ── 토스트 헬퍼 ──
@@ -1301,6 +1342,66 @@ export default function MidCareerApp() {
     });
   }, []);
 
+  // ── Supabase 세션 키 (유저별 데이터 격리) ──
+  const userKey = useCallback((key, uid) => `${key}_${uid || "demo"}`, []);
+
+  // ── Supabase 인증 상태 감지 ──
+  useEffect(() => {
+    if (DEMO_MODE || !supabase) return;
+
+    // 현재 세션 확인
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        const su = session.user;
+        const u = {
+          id: su.id,
+          name: su.user_metadata?.full_name || su.email.split("@")[0],
+          email: su.email,
+          avatar: su.user_metadata?.avatar_url || null,
+        };
+        setUser(u);
+        LS.set("user", u);
+        const p = LS.get(userKey("profile", su.id), null);
+        setProfile(p);
+        const sj = LS.get(userKey("savedJobs", su.id), []);
+        setSavedJobs(sj);
+        const no = LS.get(userKey("notifications", su.id), []);
+        setNotifications(no);
+        setView(p ? "app" : "onboarding");
+      } else {
+        setView("login");
+      }
+    });
+
+    // 로그인/로그아웃 이벤트 구독
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        const su = session.user;
+        const u = {
+          id: su.id,
+          name: su.user_metadata?.full_name || su.email.split("@")[0],
+          email: su.email,
+          avatar: su.user_metadata?.avatar_url || null,
+        };
+        setUser(u);
+        LS.set("user", u);
+        const p = LS.get(userKey("profile", su.id), null);
+        setProfile(p);
+        const sj = LS.get(userKey("savedJobs", su.id), []);
+        setSavedJobs(sj);
+        const no = LS.get(userKey("notifications", su.id), []);
+        setNotifications(no);
+        setAuthLoading(false);
+        setView(p ? "app" : "onboarding");
+      } else if (event === "SIGNED_OUT") {
+        setUser(null); setProfile(null); setSavedJobs([]); setNotifications([]);
+        setView("login");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [userKey]);
+
   // AI 매칭 적용
   const jobs = useMemo(() =>
     MOCK_JOBS.map(j => ({
@@ -1310,56 +1411,81 @@ export default function MidCareerApp() {
     })).sort((a,b) => b.matchScore - a.matchScore),
   [profile]);
 
+  // ── 구글 로그인 ──
+  const handleGoogleLogin = async () => {
+    if (DEMO_MODE || !supabase) return;
+    setAuthLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) {
+      addToast("Google 로그인 실패: " + error.message, "error");
+      setAuthLoading(false);
+    }
+  };
+
+  // ── 데모 로그인 ──
   const handleDemoLogin = () => {
     const u = { id:"demo", name:"데모 사용자", email:"demo@jobmatch.ai" };
     setUser(u); LS.set("user", u);
     setView("onboarding");
   };
 
+  // ── 프로필 완성 ──
   const handleProfileComplete = (p) => {
-    setProfile(p); LS.set("profile", p);
+    setProfile(p);
+    const key = DEMO_MODE ? "profile" : userKey("profile", user?.id);
+    LS.set(key, p);
+    LS.set("profile", p);
     setView("app");
     addToast(`${p.name}님, AI 매칭을 시작합니다! 🎯`);
   };
 
+  // ── 공고 저장 ──
   const handleSaveJob = useCallback((job) => {
     setSavedJobs(prev => {
       const exists = prev.some(j => j.id === job.id);
       const next = exists
         ? prev.filter(j => j.id !== job.id)
         : [...prev, { ...job, savedAt: new Date().toISOString(), status: "저장됨" }];
-      LS.set("savedJobs", next);
+      const key = DEMO_MODE ? "savedJobs" : userKey("savedJobs", user?.id);
+      LS.set(key, next); LS.set("savedJobs", next);
       if (!exists) {
         addToast(`"${job.title}" 저장됨 📌`);
         addNotif(`[${job.company}] ${job.title} 공고를 저장했습니다.`);
       } else {
-        addToast(`저장 취소됨`, "info");
+        addToast("저장 취소됨", "info");
       }
       return next;
     });
-  }, [addToast, addNotif]);
+  }, [addToast, addNotif, user, userKey]);
 
+  // ── 공고 지원 ──
   const handleApplyJob = useCallback((job) => {
-    // 저장됨 → 지원함 상태 변경
     setSavedJobs(prev => {
       const exists = prev.some(j => j.id === job.id);
       const base = exists ? prev : [...prev, { ...job, savedAt: new Date().toISOString(), status: "저장됨" }];
       const next = base.map(j => j.id === job.id ? { ...j, status:"지원함", appliedAt: new Date().toISOString() } : j);
-      LS.set("savedJobs", next);
+      const key = DEMO_MODE ? "savedJobs" : userKey("savedJobs", user?.id);
+      LS.set(key, next); LS.set("savedJobs", next);
       return next;
     });
     addToast(`"${job.title}" 지원 완료! ✅`, "success");
     addNotif(`[${job.company}] ${job.title}에 지원했습니다.`);
     setSelectedJob(null);
-  }, [addToast, addNotif]);
+  }, [addToast, addNotif, user, userKey]);
 
-  const handleLogout = () => {
+  // ── 로그아웃 ──
+  const handleLogout = async () => {
+    if (!DEMO_MODE && supabase) await supabase.auth.signOut();
     LS.clear();
     setUser(null); setProfile(null); setSavedJobs([]); setNotifications([]);
     setView("login");
   };
 
-  if (view === "login") return <LoginPage onDemoLogin={handleDemoLogin} />;
+  if (view === "loading") return <LoadingScreen />;
+  if (view === "login") return <LoginPage onDemoLogin={handleDemoLogin} onGoogleLogin={handleGoogleLogin} loading={authLoading} />;
   if (view === "onboarding") return <OnboardingPage user={user} onComplete={handleProfileComplete} />;
 
   return (
