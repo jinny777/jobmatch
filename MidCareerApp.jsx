@@ -1170,7 +1170,7 @@ const NAV = [
 
 function Sidebar({ activePage, setActivePage, user, profile, onLogout, savedCount }) {
   return (
-    <div style={{ width:230, background:C.white, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", height:"100vh", position:"sticky", top:0, flexShrink:0 }}>
+    <div style={{ width:230, background:C.white, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", flexShrink:0, overflow:"auto" }}>
       {/* 로고 */}
       <div style={{ padding:"20px 20px 16px", borderBottom:`1px solid ${C.border}` }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -1363,9 +1363,9 @@ export default function MidCareerApp() {
   if (view === "onboarding") return <OnboardingPage user={user} onComplete={handleProfileComplete} />;
 
   return (
-    <div style={{ display:"flex", height:"100vh", background:C.bg, overflow:"hidden" }}>
+    <div style={{ display:"flex", height:"100vh", background:C.bg }}>
       <Sidebar activePage={activePage} setActivePage={setActivePage} user={user} profile={profile} onLogout={handleLogout} savedCount={savedJobs.length} />
-      <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", minWidth:0 }}>
+      <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, overflow:"hidden" }}>
         <Header
           activePage={activePage}
           notifications={notifications}
